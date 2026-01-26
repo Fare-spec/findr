@@ -1,11 +1,13 @@
 use std::{
+    any,
     collections::{HashMap, HashSet},
     env,
     fs::{self, File},
-    io::Error,
+    io::{BufWriter, Error, Read},
     path::{Path, PathBuf},
 };
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 enum Existence {
     FolderExist,
@@ -66,11 +68,18 @@ fn create_history(file_path: &Path) -> Result<HashMap<PathBuf, SearchHistory>, E
     File::create_new(file_path)?;
     Ok(HashMap::new())
 }
-fn save_history(file_path: &Path) -> Result<HashMap<PathBuf, SearchHistory>, Error> {
-    todo!()
+fn save_history(file_path: &Path, history: &HashMap<PathBuf, SearchHistory>) -> Result<()> {
+    let file = File::create(&file_path)?;
+    let mut buffer = BufWriter::new(file);
+    postcard::to_io(&history, &mut buffer).expect("HUH");
+    Ok(())
 }
-fn load_history(file_path: &Path) -> Result<HashMap<PathBuf, SearchHistory>, Error> {
-    todo!()
+fn load_history(file_path: &Path) -> Result<HashMap<PathBuf, SearchHistory>> {
+    let mut file = File::open(file_path)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+    let history = postcard::from_bytes(&buf)?;
+    Ok(history)
 }
 
 fn folder_creation(folder_path: &Path, file_path: &Path) -> Result<Existence, Error> {
