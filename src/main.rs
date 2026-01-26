@@ -1,5 +1,8 @@
+/// TODO: Implement config (low priority)
+/// TODO: Implement recursive search thread by thread using rayon (priority first)
+/// TODO: Change the way to handle Exception to avoid crash
+/// TODO:Stop using Existence enum, at least rename it "State" or don't use it.
 use std::{
-    any,
     collections::{HashMap, HashSet},
     env,
     fs::{self, File},
@@ -9,21 +12,24 @@ use std::{
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+
 enum Existence {
     FolderExist,
     AllExist,
     WasCreated,
 }
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct SearchHistory {
-    names: HashSet<String>,
-    total_count: u32,
+    names: HashMap<String, u32>,
     most_recent: bool,
 }
 
 const DIR_PATH: &str = ".findr";
 
 const FILE_NAME: &str = "findr.bin";
+const CONFIG_FILE: &str = "findr.toml";
+const CONFIG_PATH: &str = ".config/findr";
 
 fn main() {
     let home = PathBuf::from(env::var("HOME").expect("HOME isn't defined"));
@@ -64,16 +70,19 @@ fn lookup_dir(starting_dir: &Path) -> Result<HashSet<PathBuf>, Error> {
     }
     Ok(found)
 }
+
 fn create_history(file_path: &Path) -> Result<HashMap<PathBuf, SearchHistory>, Error> {
     File::create_new(file_path)?;
     Ok(HashMap::new())
 }
+
 fn save_history(file_path: &Path, history: &HashMap<PathBuf, SearchHistory>) -> Result<()> {
-    let file = File::create(&file_path)?;
+    let file = File::create(file_path)?;
     let mut buffer = BufWriter::new(file);
-    postcard::to_io(&history, &mut buffer).expect("HUH");
+    postcard::to_io(&history, &mut buffer)?;
     Ok(())
 }
+
 fn load_history(file_path: &Path) -> Result<HashMap<PathBuf, SearchHistory>> {
     let mut file = File::open(file_path)?;
     let mut buf = Vec::new();
