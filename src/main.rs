@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::Result;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 enum Existence {
@@ -31,6 +32,7 @@ const FILE_NAME: &str = "findr.bin";
 const CONFIG_FILE: &str = "findr.toml";
 const CONFIG_PATH: &str = ".config/findr";
 
+const MAX_DEPTH: u16 = 20;
 fn main() {
     let home = PathBuf::from(env::var("HOME").expect("HOME isn't defined"));
     let folder_path = home.join(PathBuf::from(DIR_PATH));
@@ -54,11 +56,43 @@ fn main() {
     };
     println!("{:?}", history);
 
-    let subdir = lookup_dir(&home).expect("Couldn't read home dir");
+    let mut subdir = lookup_dir(&home).expect("Couldn't read home dir");
+    let ssbdir = subdir.clone();
+    let mut subdirs = create_threads(&mut subdir, 0, ssbdir).expect("HUH");
 
-    println!("{:?}", subdir);
+    println!("{:?}", subdirs);
+    save_history(&file_path, &history).expect("Couldn't save the history file...");
 }
 
+fn create_threads(
+    paths: &mut HashSet<PathBuf>,
+    current_depth: u16,
+    files_new: HashSet<PathBuf>,
+) -> Result<HashSet<PathBuf>> {
+    let mut files_old = which_files(paths);
+    files_old.extend(files_new.iter().cloned());
+    let files: HashSet<PathBuf> = which_files(paths);
+    paths.retain(|paf| paf.is_dir());
+
+    paths.par_iter().for_each(|x| explore(x, current_depth));
+
+    Ok(files_old)
+}
+
+fn explore(path: &Path, depth: u16) -> () {
+    println!("{:?}", path);
+    if depth >= MAX_DEPTH {
+    } else {
+        let mut files = lookup_dir(path).unwrap_or(HashSet::with_capacity(0));
+        let ff = files.clone();
+        create_threads(&mut files, depth + 1, ff).unwrap();
+    }
+}
+fn which_files(paths: &HashSet<PathBuf>) -> HashSet<PathBuf> {
+    let mut out = paths.clone();
+    out.retain(|p| p.is_file());
+    out
+}
 /// Function that return a HashSet of PathBuf that contain the content of starting_dir or an Error
 fn lookup_dir(starting_dir: &Path) -> Result<HashSet<PathBuf>, Error> {
     let entries = fs::read_dir(starting_dir)?;
