@@ -1,7 +1,8 @@
-/// TODO: Implement config (low priority)
-/// TODO: Implement recursive search thread by thread using rayon (priority first)
-/// TODO: Change the way to handle Exception to avoid crash
-/// TODO:Stop using Existence enum, at least rename it "State" or don't use it.
+/// TODO: Implement config (priority: low)
+/// TODO: Implement recursive search thread by thread using rayon (priority: high) (current)
+/// TODO: Implement history once the search is complete (priority: medium)
+/// TODO: Change the way to handle Exception to avoid crash (priority: medium)
+/// TODO: Stop using Existence enum, at least rename it "State" or don't use it.(priority: low)
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -55,44 +56,54 @@ fn main() {
         }
     };
     println!("{:?}", history);
-
+    let mut whole_fs: HashSet<PathBuf> = HashSet::new();
     let mut subdir = lookup_dir(&home).expect("Couldn't read home dir");
-    let ssbdir = subdir.clone();
-    let mut subdirs = create_threads(&mut subdir, 0, ssbdir).expect("HUH");
 
-    println!("{:?}", subdirs);
+    //create_threads(&mut subdir, 0, &mut whole_fs);
+
+    println!("{:?}", whole_fs);
     save_history(&file_path, &history).expect("Couldn't save the history file...");
 }
 
+fn explore(whole_fs: HashSet<PathBuf>,)
+
+
+/*
 fn create_threads(
     paths: &mut HashSet<PathBuf>,
     current_depth: u16,
-    files_new: HashSet<PathBuf>,
-) -> Result<HashSet<PathBuf>> {
+    files_new: &mut HashSet<PathBuf>,
+) -> () {
+    println!("{:?}", files_new);
+    let mut p2 = paths.clone();
+    p2.retain(|f| f.is_file());
+    files_new.extend(p2);
+    paths.par_iter().for_each(|x| explore(x, current_depth + 1));
+}
+
+/*
+
     let mut files_old = which_files(paths);
     files_old.extend(files_new.iter().cloned());
     let files: HashSet<PathBuf> = which_files(paths);
-    paths.retain(|paf| paf.is_dir());
+
+    paths.retain(|paf| paf.is_dir() && !paf.starts_with("/home/spectre/."));
 
     paths.par_iter().for_each(|x| explore(x, current_depth));
 
     Ok(files_old)
-}
+* */
 
 fn explore(path: &Path, depth: u16) -> () {
-    println!("{:?}", path);
     if depth >= MAX_DEPTH {
     } else {
         let mut files = lookup_dir(path).unwrap_or(HashSet::with_capacity(0));
-        let ff = files.clone();
-        create_threads(&mut files, depth + 1, ff).unwrap();
+        let mut ff = files.clone();
+        create_threads(&mut files, depth + 1, &mut ff);
     }
 }
-fn which_files(paths: &HashSet<PathBuf>) -> HashSet<PathBuf> {
-    let mut out = paths.clone();
-    out.retain(|p| p.is_file());
-    out
-}
+
+*/
 /// Function that return a HashSet of PathBuf that contain the content of starting_dir or an Error
 fn lookup_dir(starting_dir: &Path) -> Result<HashSet<PathBuf>, Error> {
     let entries = fs::read_dir(starting_dir)?;
