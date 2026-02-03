@@ -9,10 +9,14 @@ use std::{
     fs::{self, File},
     io::{BufWriter, Error, Read},
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use anyhow::Result;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    ThreadPoolBuilder,
+};
 use serde::{Deserialize, Serialize};
 
 enum Existence {
@@ -33,7 +37,7 @@ const FILE_NAME: &str = "findr.bin";
 const CONFIG_FILE: &str = "findr.toml";
 const CONFIG_PATH: &str = ".config/findr";
 
-const MAX_DEPTH: u16 = 20;
+const MAX_DEPTH: u16 = 30;
 fn main() {
     let home = PathBuf::from(env::var("HOME").expect("HOME isn't defined"));
     let folder_path = home.join(PathBuf::from(DIR_PATH));
@@ -56,54 +60,68 @@ fn main() {
         }
     };
     println!("{:?}", history);
-    let mut whole_fs: HashSet<PathBuf> = HashSet::new();
-    let mut subdir = lookup_dir(&home).expect("Couldn't read home dir");
+    let mut whole_fs: HashSet<PathBuf> = lookup_dir(&home).unwrap();
+    let test1 = explore(whole_fs);
+    println!("{:?}", test1);
 
-    //create_threads(&mut subdir, 0, &mut whole_fs);
-
-    println!("{:?}", whole_fs);
     save_history(&file_path, &history).expect("Couldn't save the history file...");
 }
 
-fn explore(whole_fs: HashSet<PathBuf>,)
+fn explore(whole_fs: HashSet<PathBuf>) -> HashSet<PathBuf> {
+    let pool = ThreadPoolBuilder::new().num_threads(0).build().unwrap();
+    pool.install(|| {
+        let mut dirs = select_dirs(&whole_fs);
+        let mut discovered_files: HashSet<PathBuf> = HashSet::new();
 
+        for _ in 0..MAX_DEPTH {
+            let (new_dirs, new_files) = dirs
+                .par_iter()
+                .filter_map(|dir| lookup_dir(dir).ok())
+                .fold(
+                    || (HashSet::<PathBuf>::new(), HashSet::<PathBuf>::new()),
+                    |(mut acc_dirs, mut acc_files), inside| {
+                        acc_dirs.extend(select_dirs(&inside));
+                        acc_files.extend(select_files(&inside));
+                        (acc_dirs, acc_files)
+                    },
+                )
+                .reduce(
+                    || (HashSet::<PathBuf>::new(), HashSet::<PathBuf>::new()),
+                    |(mut d1, mut f1), (d2, f2)| {
+                        d1.extend(d2);
+                        f1.extend(f2);
+                        (d1, f1)
+                    },
+                );
 
-/*
-fn create_threads(
-    paths: &mut HashSet<PathBuf>,
-    current_depth: u16,
-    files_new: &mut HashSet<PathBuf>,
-) -> () {
-    println!("{:?}", files_new);
-    let mut p2 = paths.clone();
-    p2.retain(|f| f.is_file());
-    files_new.extend(p2);
-    paths.par_iter().for_each(|x| explore(x, current_depth + 1));
+            discovered_files.extend(new_files);
+            dirs = new_dirs;
+        }
+
+        discovered_files
+    })
 }
 
-/*
-
-    let mut files_old = which_files(paths);
-    files_old.extend(files_new.iter().cloned());
-    let files: HashSet<PathBuf> = which_files(paths);
-
-    paths.retain(|paf| paf.is_dir() && !paf.starts_with("/home/spectre/."));
-
-    paths.par_iter().for_each(|x| explore(x, current_depth));
-
-    Ok(files_old)
-* */
-
-fn explore(path: &Path, depth: u16) -> () {
-    if depth >= MAX_DEPTH {
-    } else {
-        let mut files = lookup_dir(path).unwrap_or(HashSet::with_capacity(0));
-        let mut ff = files.clone();
-        create_threads(&mut files, depth + 1, &mut ff);
+fn select_dirs(source: &HashSet<PathBuf>) -> HashSet<PathBuf> {
+    let mut files: HashSet<PathBuf> = HashSet::new();
+    for elt in source {
+        if elt.is_dir() {
+            files.insert(elt.to_owned());
+        }
     }
+    files
 }
 
-*/
+fn select_files(source: &HashSet<PathBuf>) -> HashSet<PathBuf> {
+    let mut files: HashSet<PathBuf> = HashSet::new();
+    for elt in source {
+        if elt.is_file() {
+            files.insert(elt.to_owned());
+        }
+    }
+    files
+}
+
 /// Function that return a HashSet of PathBuf that contain the content of starting_dir or an Error
 fn lookup_dir(starting_dir: &Path) -> Result<HashSet<PathBuf>, Error> {
     let entries = fs::read_dir(starting_dir)?;
