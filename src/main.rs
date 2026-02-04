@@ -1,6 +1,7 @@
 /// TODO: Implement config (priority: low)
-/// TODO: Implement recursive search thread by thread using rayon (priority: high) (current)
 /// TODO: Implement history once the search is complete (priority: medium)
+/// TODO: Maybe use an index to make a gain of time (priority: medium-low)
+/// TODO: Create a .ignore file to avoid exploring useless path (priority: high)
 /// TODO: Change the way to handle Exception to avoid crash (priority: medium)
 /// TODO: Stop using Existence enum, at least rename it "State" or don't use it.(priority: low)
 use std::{
@@ -9,7 +10,6 @@ use std::{
     fs::{self, File},
     io::{BufWriter, Error, Read},
     path::{Path, PathBuf},
-    sync::Mutex,
 };
 
 use anyhow::Result;
@@ -35,7 +35,8 @@ const DIR_PATH: &str = ".findr";
 
 const FILE_NAME: &str = "findr.bin";
 const CONFIG_FILE: &str = "findr.toml";
-const CONFIG_PATH: &str = ".config/findr";
+const CONFIG_PATH: &str = ".config/findr/findr.conf";
+const IGNORE_PATH: &str = ".config/findr/.ignore";
 
 const MAX_DEPTH: u16 = 30;
 fn main() {
